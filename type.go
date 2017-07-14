@@ -1,11 +1,14 @@
 package yunbi
 
 import (
+	"encoding/json"
 	"time"
 )
 
-var AccessKey string = ""
-var SecretKey string = ""
+var (
+	AccessKey = ""
+	SecretKey = ""
+)
 
 const (
 	YUN_BI_HOST = "https://yunbi.com"
@@ -93,9 +96,9 @@ type DepthRequest struct {
 }
 
 type DepthResponse struct {
-	Timestamp int64      `json:"timestamp"`
-	Asks      [][]string `json:"asks"`
-	Bids      [][]string `json:"bids"`
+	Timestamp int64           `json:"timestamp"`
+	Asks      [][]json.Number `json:"asks"`
+	Bids      [][]json.Number `json:"bids"`
 }
 
 type TradeRequest struct {
@@ -171,4 +174,8 @@ type OrderRequest struct {
 
 type OrderResponse struct {
 	Id int64 `json:"id"` // Buy/Sell 代表买单/卖单
+}
+
+type ClearOrderResponse struct {
+	Orders Order `json:"orders"` // Buy/Sell 代表买单/卖单
 }

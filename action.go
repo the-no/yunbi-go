@@ -24,6 +24,7 @@ func YunBiSignature(mothod, uri, query, key string) string {
 	}
 
 	payload := strings.Join(params, "|")
+	fmt.Println(payload)
 	mac := hmac.New(sha256.New, []byte(key))
 	mac.Write([]byte(payload))
 	data := mac.Sum(nil)
@@ -32,39 +33,38 @@ func YunBiSignature(mothod, uri, query, key string) string {
 
 func createRequest(mothod, uri string, params map[string]string) *http.Request {
 
-	request, err := http.NewRequest(mothod, YUN_BI_HOST+uri, nil)
-	if err != nil {
-		return nil
-	}
-	request.Header.Set("Content-Type", "charset=utf-8")
-	request.Close = true
-
 	q := url.Values{}
 	if params != nil {
 		for k, v := range params {
 			q.Add(k, v)
 		}
 		if params["access_key"] != "" {
-			tonce := strconv.FormatInt(time.Now().UnixNano()/1000000, 10)
+			tonce := strconv.FormatInt(time.Now().Unix()*1000, 10)
 			q.Add("tonce", tonce)
 			query := q.Encode()
 			sign := YunBiSignature(mothod, uri, query, SecretKey)
 			q.Add("signature", sign)
-			//params["tonce"] = tonce
-			//params["signature"] = sign
+
 		}
 	}
 	if mothod == "GET" {
-		request.URL.RawQuery = q.Encode()
-	} else {
-		/*data, err := json.Marshal(params)
+		request, err := http.NewRequest(mothod, YUN_BI_HOST+uri, nil)
 		if err != nil {
 			return nil
 		}
-		request.Body = ioutil.NopCloser(bytes.NewReader(data))*/
-		request.PostForm = q
+		request.Close = true
+		request.Header.Set("Content-Type", "charset=utf-8")
+		request.URL.RawQuery = q.Encode()
+		return request
+	} else {
+		request, err := http.NewRequest(mothod, YUN_BI_HOST+uri, bytes.NewBufferString(q.Encode()))
+		if err != nil {
+			return nil
+		}
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.Header.Set("Accept", "application/json")
+		return request
 	}
-	return request
 }
 
 func getHttpsClient() (client *http.Client) {
@@ -398,6 +398,7 @@ func DepositList(req *DepositsRequest) (err error) {
 }
 
 func CreateOrder(req *OrderRequest) (response *OrderResponse, err error) {
+	//return nil, errors.New("test")
 	if req.Side != "buy" && req.Side != "sell" {
 		return nil, errors.New("side Requested [buy ,sell]")
 	}
@@ -407,32 +408,35 @@ func CreateOrder(req *OrderRequest) (response *OrderResponse, err error) {
 	if req.Market == "" {
 		return nil, errors.New("Market Requested")
 	}
-
 	params := map[string]string{
 		"access_key": AccessKey,
 		"market":     req.Market,
 		"side":       req.Side,
-		"volume":     strconv.FormatFloat(req.Volume, 'f', -1, 64),
-		"price":      strconv.FormatFloat(req.Price, 'f', -1, 64),
+		"volume":     strconv.FormatFloat(req.Volume, 'f', 5, 64),
+		"price":      strconv.FormatFloat(req.Price, 'f', 5, 64),
 	}
 	if req.OrderType != "" {
 		params["order_type"] = req.OrderType
 	}
+	fmt.Println("CreateRequest3.....")
 	request := createRequest("POST", "/api/v2/orders.json", params)
 	cli := getHttpsClient()
 	resp, err := cli.Do(request)
 	defer resp.Body.Close()
-	if err != nil {
+	/*if err != nil {
 		return nil, err
-	}
+	}*/
+	fmt.Println(req, request, resp, err)
 	response = &OrderResponse{}
 	doc, err := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(doc), err)
 	if err != nil {
 		return nil, err
 	}
 	if checkError(doc) != nil {
 		return nil, err
 	}
+
 	err = json.Unmarshal(doc, response)
 	if err != nil {
 		return nil, err
@@ -450,7 +454,7 @@ func checkError(doc []byte) error {
 	return nil
 }
 
-func ClearOrder(side string) (response *OrderResponse, err error) {
+func ClearOrder(side string) (response *ClearOrderResponse, err error) {
 	if side != "buy" && side != "sell" {
 		return nil, errors.New("side Requested [buy ,sell]")
 	}
@@ -460,14 +464,14 @@ func ClearOrder(side string) (response *OrderResponse, err error) {
 		"side":       side,
 	}
 
-	request := createRequest("POST", "/api/v2/order/clear.json", params)
+	request := createRequest("POST", "/api/v2/orders/clear.json", params)
 	cli := getHttpsClient()
 	resp, err := cli.Do(request)
 	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
-	response = &OrderResponse{}
+	response = &ClearOrderResponse{}
 	doc, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -475,7 +479,7 @@ func ClearOrder(side string) (response *OrderResponse, err error) {
 	if checkError(doc) != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(doc, response)
+	err = json.Unmarshal(doc, response.Orders)
 	if err != nil {
 		return nil, err
 	}
@@ -535,6 +539,7 @@ func OrderInfo(id int64) (response *Order, err error) {
 	if checkError(doc) != nil {
 		return nil, err
 	}
+	fmt.Println(string(doc))
 	err = json.Unmarshal(doc, response)
 	if err != nil {
 		return nil, err
